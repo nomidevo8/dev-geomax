@@ -41,6 +41,16 @@ class Dev_WooCommerce_Init {
             'description' => __('Enter a custom URL to override Add to Cart button. You can pass product info like this: <code>?product_value=whatever</code>. If not provided, the product name will be added automatically.', 'your-textdomain'),
         ]);
 
+        // Custom Button Text
+        woocommerce_wp_text_input([
+            'id'          => '_custom_add_to_cart_text',
+            'label'       => __('Custom Button Text', 'dev-geomax'),
+            'placeholder' => __('Send Request', 'dev-geomax'),
+            'desc_tip'    => true,
+            'description' => __('Enter custom text for the Add to Cart button. Leave empty to use the default "Send Request".', 'dev-geomax'),
+        ]);
+
+
         // Open in new tab
         woocommerce_wp_checkbox([
             'id'    => '_custom_add_to_cart_new_tab',
@@ -58,10 +68,13 @@ class Dev_WooCommerce_Init {
         $enable = isset($_POST['_custom_add_to_cart_enable']) ? 'yes' : 'no';
         $url = isset($_POST['_custom_add_to_cart_url']) ? esc_url_raw($_POST['_custom_add_to_cart_url']) : '';
         $new_tab = isset($_POST['_custom_add_to_cart_new_tab']) ? 'yes' : 'no';
+        $button_text = isset($_POST['_custom_add_to_cart_text']) ? sanitize_text_field($_POST['_custom_add_to_cart_text']) : '';
 
         $product->update_meta_data('_custom_add_to_cart_enable', $enable);
         $product->update_meta_data('_custom_add_to_cart_url', $url);
         $product->update_meta_data('_custom_add_to_cart_new_tab', $new_tab);
+        $product->update_meta_data('_custom_add_to_cart_text', $button_text);
+
     }
 
     /** Replace Add to Cart button HTML on shop/product pages */
@@ -100,16 +113,24 @@ class Dev_WooCommerce_Init {
         global $product;
 
         if (!$product instanceof WC_Product) {
-            return $text; // Avoid fatal error when $product is not available
+            return $text;
         }
 
         $enable = $product->get_meta('_custom_add_to_cart_enable');
+
         if ($enable === 'yes') {
-            return __('Send Request', 'your-textdomain');
+          
+            $custom_text = $product->get_meta('_custom_add_to_cart_text');
+            if (!empty($custom_text)) {
+                return esc_html($custom_text);
+            } else {
+                return __('Send Request', 'your-textdomain'); 
+            }
         }
 
         return $text;
     }
+
 
 
     /** Change the Add to Cart button URL on single product page */
@@ -151,12 +172,16 @@ class Dev_WooCommerce_Init {
                     $separator = (strpos($parsed_url, '?') !== false) ? '&' : '?';
                     $parsed_url .= $separator . 'product_value=' . rawurlencode($product->get_name());
                 }
+                $custom_text = $product->get_meta('_custom_add_to_cart_text');
+                if (empty($custom_text)) {
+                    $custom_text = __('Send Request', 'your-textdomain');
+                }
                 $target = ($new_tab === 'yes') ? ' target="_blank"' : '';
-                echo sprintf(
-                    '<a href="%s" class="single_add_to_cart_button button alt custom-add-to-cart-link" %s>%s</a>',
+               printf(
+                    '<a href="%s" class="single_add_to_cart_button button alt custom-add-to-cart-link"%s>%s</a>',
                     esc_url($parsed_url),
                     $target,
-                    esc_html__('Send Request', 'your-textdomain')
+                    esc_html($custom_text)
                 );
             }, 30);
         }
