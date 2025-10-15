@@ -30,6 +30,28 @@ function dev_geomax_plugin_init() {
         return;
     }
 
+    /**
+     * Enqueue frontend JavaScript
+     */
+    add_action( 'wp_enqueue_scripts', 'dev_geomax_enqueue_scripts' );
+
+    function dev_geomax_enqueue_scripts() {
+        // Register script
+        wp_enqueue_script(
+            'dev-geomax-script', // Handle name
+            plugin_dir_url( __FILE__ ) . 'assets/js/script.js', // Path to your JS file
+            array('jquery'), // Dependencies
+            filemtime( plugin_dir_path( __FILE__ ) . 'assets/js/script.js' ), // Version (auto-updates)
+            true // Load in footer
+        );
+
+        // Optional: localize variables if needed
+        wp_localize_script( 'dev-geomax-script', 'devGeomaxData', array(
+            'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+            'siteUrl' => site_url(),
+        ) );
+    }
+
     // Load main WooCommerce functionality
     require_once __DIR__ . '/includes/woocommerce/init.php';
 }
