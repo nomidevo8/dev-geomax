@@ -15,9 +15,10 @@ class Dev_WooCommerce_Init {
         add_action('woocommerce_admin_process_product_object', [$this, 'save_admin_fields']);
         add_filter('woocommerce_loop_add_to_cart_link', [$this, 'override_add_to_cart_button'], 10, 2);
         add_filter('woocommerce_product_single_add_to_cart_text', [$this, 'custom_single_add_to_cart_text']);
+        add_filter( 'woocommerce_product_add_to_cart_text', [$this, 'custom_single_add_to_cart_text'], 10, 2 ); 
         add_filter('woocommerce_product_add_to_cart_url', [$this, 'custom_single_add_to_cart_url'], 10, 2);
         add_filter('woocommerce_is_purchasable', [$this, 'custom_is_purchasable'], 10, 2);
-        add_action('woocommerce_before_single_product', [$this, 'maybe_disable_add_to_cart_form']);
+        add_action('woocommerce_single_product_summary', [$this, 'custom_add_to_cart_button'], 31);
         add_action('wp_footer', [$this, 'dev_footer_script']);
 
     }
@@ -155,38 +156,26 @@ class Dev_WooCommerce_Init {
     }
 
     /** Disable add-to-cart form and replace with custom link */
-    public function maybe_disable_add_to_cart_form() {
+    public function custom_add_to_cart_button() {
         global $product;
+
         if (!$product instanceof WC_Product) return;
 
         $enable = $product->get_meta('_custom_add_to_cart_enable');
-        $custom_url = $product->get_meta('_custom_add_to_cart_url');
+        if ($enable !== 'yes') return;
+
+        $url = $product->get_meta('_custom_add_to_cart_url');
+        $text = $product->get_meta('_custom_add_to_cart_text') ?: __('Send Request', 'your-textdomain');
         $new_tab = $product->get_meta('_custom_add_to_cart_new_tab');
 
-        if ($enable === 'yes' && !empty($custom_url)) {
-            remove_action('woocommerce_single_product_summary', 'woocommerce_template_single_add_to_cart', 30);
-
-            add_action('woocommerce_single_product_summary', function() use ($product, $custom_url, $new_tab) {
-                $parsed_url = esc_url($custom_url);
-                if (strpos($parsed_url, 'product_value=') === false) {
-                    $separator = (strpos($parsed_url, '?') !== false) ? '&' : '?';
-                    $parsed_url .= $separator . 'product_value=' . rawurlencode($product->get_name());
-                }
-                $custom_text = $product->get_meta('_custom_add_to_cart_text');
-                if (empty($custom_text)) {
-                    $custom_text = __('Send Request', 'your-textdomain');
-                }
-                $target = ($new_tab === 'yes') ? ' target="_blank"' : '';
-               printf(
-                    '<a href="%s" class="single_add_to_cart_button button alt custom-add-to-cart-link"%s>%s</a>',
-                    esc_url($parsed_url),
-                    $target,
-                    esc_html($custom_text)
-                );
-            }, 30);
+        $target = ($new_tab === 'yes') ? ' target="_blank"' : '';
+        if (strpos($url, 'product_value=') === false) {
+            $separator = (strpos($url, '?') !== false) ? '&' : '?';
+            $url .= $separator . 'product_value=' . rawurlencode($product->get_name());
         }
-    }
 
+        echo '<a href="' . esc_url($url) . '" class="single_add_to_cart_button button alt custom-add-to-cart-link"' . $target . '>' . esc_html($text) . '</a>';
+    }
 
     public function custom_is_purchasable($purchasable, $product) {
         if ($product->get_meta('_custom_add_to_cart_enable') === 'yes') {
@@ -196,13 +185,37 @@ class Dev_WooCommerce_Init {
     }
 
     public function dev_footer_script() {
+        if (!is_product()) return;
+
+        global $product;
+
+        if (!$product instanceof WC_Product) return;
+
+        $enable = $product->get_meta('_custom_add_to_cart_enable');
+        if ($enable !== 'yes') return;
+
+        $custom_text = $product->get_meta('_custom_add_to_cart_text') ?: __('Send Request', 'your-textdomain');
+        $custom_url  = $product->get_meta('_custom_add_to_cart_url') ?: get_permalink($product->get_id());
+        $new_tab     = $product->get_meta('_custom_add_to_cart_new_tab') === 'yes' ? 'true' : 'false';
+
         ?>
         <script>
-        jQuery(function($){
-            const btn = $('.custom-add-to-cart-link');
-            if(btn.length){
-                $('.single_add_to_cart_button').not('.custom-add-to-cart-link').remove();
-                $('.cart').remove(); // removes form
+        document.addEventListener('DOMContentLoaded', function(){
+            // Elementor Add to Cart button
+            const btnWrapper = document.querySelector('.elementor-widget-wc-add-to-cart .elementor-button-wrapper a');
+
+            if(btnWrapper){
+                btnWrapper.querySelector('.elementor-button-text').textContent = <?php echo json_encode($custom_text); ?>;
+                btnWrapper.href = <?php echo json_encode($custom_url); ?>;
+                if(<?php echo $new_tab === 'true' ? 'true' : 'false'; ?>){
+                    btnWrapper.setAttribute('target', '_blank');
+                } else {
+                    btnWrapper.removeAttribute('target');
+                }
+
+                // Remove WooCommerce default form if any
+                const wcForm = document.querySelector('.single_add_to_cart_button');
+                if(wcForm) wcForm.remove();
             }
         });
         </script>
@@ -234,6 +247,8 @@ class Dev_WooCommerce_Init {
         </script>
         <?php
     }
+
+    
 }
 
 new Dev_WooCommerce_Init();
