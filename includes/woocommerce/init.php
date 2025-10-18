@@ -185,28 +185,43 @@ class Dev_WooCommerce_Init {
     }
 
     public function dev_footer_script() {
+    
         if (!is_product()) return;
-
+  
         global $product;
 
         if (!$product instanceof WC_Product) return;
 
         $enable = $product->get_meta('_custom_add_to_cart_enable');
-        if ($enable !== 'yes') return;
-
         $custom_text = $product->get_meta('_custom_add_to_cart_text') ?: __('Send Request', 'your-textdomain');
-        $custom_url  = $product->get_meta('_custom_add_to_cart_url') ?: get_permalink($product->get_id());
+        $custom_url  = $product->get_meta('_custom_add_to_cart_url');
         $new_tab     = $product->get_meta('_custom_add_to_cart_new_tab') === 'yes' ? 'true' : 'false';
-
+        $fallback_url = get_permalink($product->get_id()); 
+     
         ?>
         <script>
         document.addEventListener('DOMContentLoaded', function(){
             // Elementor Add to Cart button
-            const btnWrapper = document.querySelector('.elementor-widget-wc-add-to-cart .elementor-button-wrapper a');
-
+            const btnWrapper = document.querySelector('.elementor-widget-wc-add-to-cart a');
             if(btnWrapper){
-                btnWrapper.querySelector('.elementor-button-text').textContent = <?php echo json_encode($custom_text); ?>;
-                btnWrapper.href = <?php echo json_encode($custom_url); ?>;
+                const textSpan = btnWrapper.querySelector('.elementor-button-text');
+                let finalURL;
+                <?php if ($enable === 'yes' && !empty($custom_url)) : ?>
+                if (textSpan) textSpan.textContent = <?php echo json_encode($custom_text); ?>;
+                    // ✅ Custom URL enabled
+                    finalURL = <?php echo json_encode($custom_url); ?>;
+                    if(finalURL.indexOf('product_value=') === -1){
+                        const sep = finalURL.includes('?') ? '&' : '?';
+                        finalURL += sep + 'product_value=' + encodeURIComponent('<?php echo $product->get_name(); ?>');
+                    }
+                <?php else : ?>
+                    // 🚫 Custom disabled → fallback to same page URL
+                    finalURL = <?php echo json_encode($fallback_url); ?>;
+                <?php endif; ?>
+
+                btnWrapper.href = finalURL;
+
+                // Handle target behavior
                 if(<?php echo $new_tab === 'true' ? 'true' : 'false'; ?>){
                     btnWrapper.setAttribute('target', '_blank');
                 } else {
@@ -221,6 +236,7 @@ class Dev_WooCommerce_Init {
         </script>
         <?php
     }
+
 
     /** Admin JS to toggle URL input */
     public function admin_footer_script() {
