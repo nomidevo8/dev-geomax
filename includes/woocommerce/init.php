@@ -273,11 +273,11 @@ class Dev_WooCommerce_Init
 
         // Get all products that have custom links enabled
         $args = [
-            'post_type' => 'product',
+            'post_type'      => 'product',
             'posts_per_page' => -1,
-            'meta_query' => [
+            'meta_query'     => [
                 [
-                    'key' => '_custom_add_to_cart_enable',
+                    'key'   => '_custom_add_to_cart_enable',
                     'value' => 'yes'
                 ]
             ]
@@ -285,44 +285,42 @@ class Dev_WooCommerce_Init
 
         $query = new WP_Query($args);
 
-        if (!$query->have_posts()) {
-            return;
-        }
-
         // Prepare product data for JS
         $products = [];
-        foreach ($query->posts as $product_post) {
-            $pid = $product_post->ID;
-            $custom_text = get_post_meta($pid, '_custom_add_to_cart_text_shop', true) ?: 'Anfragen';
-            $custom_url = get_post_meta($pid, '_custom_add_to_cart_url', true);
-            $new_tab = get_post_meta($pid, '_custom_add_to_cart_new_tab', true) === 'yes' ? '_blank' : '_self';
+        if ($query->have_posts()) {
+            foreach ($query->posts as $product_post) {
+                $pid         = $product_post->ID;
+                $custom_text = get_post_meta($pid, '_custom_add_to_cart_text_shop', true) ?: 'Anfragen';
+                $custom_url  = get_post_meta($pid, '_custom_add_to_cart_url', true);
+                $new_tab     = get_post_meta($pid, '_custom_add_to_cart_new_tab', true) === 'yes' ? '_blank' : '_self';
 
-            if (!empty($custom_url)) {
-                $products[$pid] = [
-                    'text' => $custom_text ?: __('Anfragen', 'dev-geomax'),
-                    'url' => $custom_url,
-                    'new_tab' => $new_tab
-                ];
+                if (!empty($custom_url)) {
+                    $products[$pid] = [
+                        'text'    => $custom_text,
+                        'url'     => $custom_url,
+                        'new_tab' => $new_tab,
+                    ];
+                }
             }
-        }
-
-        if (empty($products)) {
-            return;
         }
 
         ?>
         <script>
             document.addEventListener('DOMContentLoaded', function () {
                 const productData = <?php echo wp_json_encode($products); ?>;
-                console.log("productData:", productData);
+
                 document.querySelectorAll('.shopengine-archive-mode-grid li.product').forEach(function (productEl) {
-                    const pid = productEl.className.match(/post-(\d+)/);
-                    if (!pid || !productData[pid[1]]) return;
+                    const pidMatch = productEl.className.match(/post-(\d+)/);
+                    const pid = pidMatch ? pidMatch[1] : null;
 
-                    const product = productData[pid[1]];
                     const btn = productEl.querySelector('a.button.custom-add-to-cart-link');
+                    const btnSimple = productEl.querySelector('a.button.product_type_simple');
+                    if (!btn && !btnSimple) return;
 
-                    if (btn) {
+                    // Case 1: Custom product (enabled)
+                    if (pid && productData[pid]) {
+                        const product = productData[pid];
+
                         // Change text
                         btn.textContent = product.text;
 
@@ -341,12 +339,17 @@ class Dev_WooCommerce_Init
                             e.stopImmediatePropagation();
                             window.open(finalURL, product.new_tab);
                         });
+                    } 
+                    // Case 2: Normal product (not enabled)
+                    else {
+                        btnSimple.textContent = 'In den Warenkorb legen';
                     }
                 });
             });
         </script>
         <?php
     }
+
 
     /** Admin JS to toggle URL input */
     public function admin_footer_script()
